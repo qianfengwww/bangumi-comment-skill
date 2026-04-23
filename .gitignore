@@ -1,0 +1,13 @@
+# Ignore local runtime noise
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+
+# Collection artifacts
+.tmp/
+logs/
+
+# Generated scratch files
+scratch/
