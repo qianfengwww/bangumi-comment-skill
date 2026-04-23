@@ -11,3 +11,8 @@ logs/
 
 # Generated scratch files
 scratch/
+
+# Keep repo minimal; ignore local research assets
+/data/
+/examples/
+/scripts/
