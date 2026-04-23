@@ -13,6 +13,13 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+try:
+    from script_logging import get_logger as _shared_get_logger
+    from script_logging import setup_logging as _shared_setup_logging
+except ImportError:
+    _shared_get_logger = None
+    _shared_setup_logging = None
+
 
 DEFAULT_USER_AGENT = "bangumi-comment-skill/0.4 (+https://bgm.tv/)"
 DEFAULT_TIMEOUT = (10.0, 30.0)
@@ -21,6 +28,10 @@ _LOGGING_CONFIGURED = False
 
 
 def setup_logging(verbose: bool = True) -> None:
+    if _shared_setup_logging is not None:
+        _shared_setup_logging(verbose=verbose)
+        return
+
     global _LOGGING_CONFIGURED
     if _LOGGING_CONFIGURED:
         return
@@ -37,6 +48,9 @@ def setup_logging(verbose: bool = True) -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
+    if _shared_get_logger is not None:
+        return _shared_get_logger(name)
+
     setup_logging()
     return logging.getLogger(name)
 

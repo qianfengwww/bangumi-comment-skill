@@ -17,7 +17,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from script_logging import get_logger, setup_logging
-from script_net import HttpClient, RequestError
+from script_http import HttpClient, RequestError
 
 
 BASE = "https://bgm.tv"

@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 from script_logging import get_logger, setup_logging
-from script_net import HttpClient
+from script_http import HttpClient
 
 BASE = "https://bangumi.tv"
 LOGGER = get_logger("collect_bangumi_logs")
