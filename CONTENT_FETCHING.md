@@ -126,7 +126,122 @@ python scripts/fetch_anime_episodes.py --subject-id 12345 --fetch-web-detail
 
 ---
 
-## 书籍：读取 EPUB 内容
+## 书籍：统一收集写作素材
+
+**脚本**: `scripts/collect_book_materials.py`
+
+这个脚本是书籍侧的默认入口，适合把多种来源整理成一个可直接喂给下游写作的 bundle：
+
+- EPUB 文件
+- 外部网页 URL
+- Bangumi 书籍标题
+- Bangumi subject URL / `subject_id`
+
+### 基本用法
+
+```bash
+# 只给 Bangumi 书名，自动搜索书籍条目
+python scripts/collect_book_materials.py --title "三体"
+
+# 只给 Bangumi 条目链接
+python scripts/collect_book_materials.py --subject-url "https://bgm.tv/subject/9585"
+
+# 把 Bangumi 标题、EPUB、外部网页合并成一个 bundle
+python scripts/collect_book_materials.py \
+  --title "三体" \
+  --epub ./three-body.epub \
+  --url "https://example.com/review" \
+  --output book-materials.json
+
+# 直接把 --url 里的 Bangumi subject URL 当条目来源，其余 URL 仍按网页抓取
+python scripts/collect_book_materials.py \
+  --url "https://bgm.tv/subject/9585" \
+  --url "https://example.com/wiki" \
+  --output book-materials.md
+
+# 只取 EPUB 元数据
+python scripts/collect_book_materials.py --epub ./book.epub --metadata-only
+```
+
+### 输出格式（JSON）
+
+```json
+{
+  "bundle_type": "book_materials",
+  "generated_at": "2026-04-24T04:01:18+00:00",
+  "inputs": {
+    "epub_files": ["./three-body.epub"],
+    "urls": ["https://example.com/review"],
+    "subject_selector": {"query": "三体"}
+  },
+  "subject_resolution": {
+    "query": "三体",
+    "subject_id": 9585,
+    "match_type": "search",
+    "best_match": {
+      "id": 9585,
+      "name": "三体",
+      "name_cn": "",
+      "type": 1,
+      "url": "https://bgm.tv/subject/9585"
+    },
+    "alternatives": [],
+    "error": null
+  },
+  "subject": {
+    "subject_id": 9585,
+    "title": "三体",
+    "summary": "Bangumi 条目简介",
+    "tags": ["科幻"],
+    "infobox": {
+      "原作": "刘慈欣",
+      "出版社": "重庆出版社"
+    }
+  },
+  "materials": [
+    {
+      "kind": "bangumi_subject",
+      "source": "https://bgm.tv/subject/9585",
+      "title": "三体",
+      "content": "Bangumi 条目简介"
+    },
+    {
+      "kind": "epub",
+      "source": "./three-body.epub",
+      "title": "三体",
+      "metadata": {
+        "author": "刘慈欣"
+      },
+      "chapters": [
+        {
+          "index": 1,
+          "title": "第一章",
+          "content": "章节正文..."
+        }
+      ]
+    },
+    {
+      "kind": "web_page",
+      "source": "https://example.com/review",
+      "title": "网页标题",
+      "content": "网页正文..."
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
+```
+
+### 使用建议
+
+- 默认优先用这个脚本处理书籍任务，因为它能把不同来源整理成一个统一结构
+- 标题搜索出现 `ambiguous_match` 时，脚本仍会保留最佳候选和 `alternatives`，写作前最好确认具体条目
+- `materials` 已按来源归一化，后续写作可以直接消费，不必再分别解析 EPUB 输出和网页输出
+- 需要 Markdown bundle 时可用 `--format markdown`，或直接把输出文件名写成 `.md`
+
+---
+
+## 书籍：仅读取 EPUB 内容
 
 **脚本**: `scripts/read_epub.py`
 
@@ -413,16 +528,17 @@ python scripts/fetch_web_content.py --url "https://example.com/review" --output 
 ### 书籍评论流程
 
 ```bash
-# 方案 A：用户上传 EPUB
-python scripts/read_epub.py --input book.epub --output book-content.md
-
-# 方案 B：用户提供网站链接
-python scripts/fetch_web_content.py --url "https://example.com/review" --output web-content.md
+# 默认入口：统一收集素材
+python scripts/collect_book_materials.py \
+  --title "三体" \
+  --epub book.epub \
+  --url "https://example.com/review" \
+  --output book-materials.json
 
 # （可选）抓取站内长评参考
 python scripts/fetch_bangumi_logs.py --query "三体" --subject-type book --output logs.json
 
-# 调用写作层
+# 调用写作层，直接消费统一 bundle
 # （由主 skill 自动处理）
 ```
 
