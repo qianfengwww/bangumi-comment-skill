@@ -1,8 +1,13 @@
 # Ignore local runtime noise
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
 .DS_Store
 
 # Collection artifacts
@@ -12,6 +17,9 @@ logs/
 
 # Generated scratch files
 scratch/
+
+# Temporary script-level verification harnesses
+/scripts/test_*.py
 
 # Keep repo minimal; ignore local research assets
 /data/
