@@ -2,6 +2,103 @@
 
 本目录下的脚本用于在生成 Bangumi 风格评论/日志前，获取作品相关的剧情、设定、分集/分章/分路线信息。
 
+## 统一入口：优先用 `scripts/collect_materials.py`
+
+这是当前动画 / 书籍 / 游戏三类任务的默认素材入口。它会根据 `--domain` 复用现有下游脚本，把 Bangumi 条目、通用网页、书籍 EPUB，以及可选的 Bangumi 站内长评整理成一个统一 bundle。
+
+### 适用输入
+
+- Bangumi `subject_id`
+- Bangumi subject URL
+- 标题查询
+- 自动识别输入（URL 或标题）
+- 通用网页 URL
+- EPUB（仅书籍）
+
+### 基本用法
+
+```bash
+# 动画：按标题收集统一素材
+python scripts/collect_materials.py --domain anime --title "CLANNAD" --output anime-materials.json
+
+# 动画：条目 + 外部链接 + 站内长评
+python scripts/collect_materials.py \
+  --domain anime \
+  --subject-url "https://bgm.tv/subject/51" \
+  --url "https://example.com/wiki" \
+  --include-bangumi-logs \
+  --output anime-materials.md
+
+# 书籍：标题 + EPUB + 网页
+python scripts/collect_materials.py \
+  --domain book \
+  --title "三体" \
+  --epub ./three-body.epub \
+  --url "https://example.com/review" \
+  --output book-materials.json
+
+# 游戏：标题 + 指引说明 + 站内长评
+python scripts/collect_materials.py \
+  --domain game \
+  --query "沙耶之歌" \
+  --include-guidance \
+  --include-bangumi-logs \
+  --output game-materials.json
+```
+
+### 输出格式（JSON）
+
+```json
+{
+  "bundle_type": "materials_bundle",
+  "format_version": 1,
+  "domain": "anime",
+  "generated_at": "2026-04-24T04:01:18+00:00",
+  "subject_resolution": {
+    "query": "CLANNAD",
+    "subject_id": 51,
+    "match_type": "search"
+  },
+  "subject": {
+    "subject_id": 51,
+    "title": "CLANNAD -クラナド-",
+    "title_cn": "CLANNAD",
+    "url": "https://bgm.tv/subject/51",
+    "summary": "作品简介"
+  },
+  "materials": [
+    {
+      "kind": "bangumi_subject",
+      "domain": "anime"
+    },
+    {
+      "kind": "anime_episodes",
+      "domain": "anime"
+    },
+    {
+      "kind": "web_page",
+      "domain": "anime"
+    },
+    {
+      "kind": "bangumi_logs",
+      "domain": "anime"
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
+```
+
+### 设计说明
+
+- **动画**：复用 `scripts/fetch_anime_episodes.py`
+- **书籍**：复用 `scripts/collect_book_materials.py`
+- **游戏**：复用 `scripts/fetch_game_plot.py`
+- **通用网页**：复用 `scripts/fetch_web_content.py`
+- **站内长评**：复用 `scripts/fetch_bangumi_logs.py`
+
+只有在明确只想调试单一数据源时，才建议直接调用下面这些低层脚本。
+
 ## 依赖安装
 
 ```bash
@@ -512,51 +609,42 @@ python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.md
 ### 动画评论流程
 
 ```bash
-# 1. 获取分集信息
-python scripts/fetch_anime_episodes.py --query "CLANNAD" --output episodes.json
+# 默认入口：统一收集动画素材
+python scripts/collect_materials.py --domain anime --query "CLANNAD" --output anime-materials.json
 
-# 2. （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --query "CLANNAD" --subject-type anime --output logs.json
-
-# 3. （可选）爬取外部网站
-python scripts/fetch_web_content.py --url "https://example.com/review" --output web-content.md
-
-# 4. 调用写作层（传入所有素材）
-# （由主 skill 自动处理）
+# 可选：补外部页面和站内长评
+python scripts/collect_materials.py \
+  --domain anime \
+  --query "CLANNAD" \
+  --url "https://example.com/review" \
+  --include-bangumi-logs \
+  --output anime-materials.md
 ```
 
 ### 书籍评论流程
 
 ```bash
-# 默认入口：统一收集素材
-python scripts/collect_book_materials.py \
+# 默认入口：统一收集书籍素材
+python scripts/collect_materials.py \
+  --domain book \
   --title "三体" \
   --epub book.epub \
   --url "https://example.com/review" \
+  --include-bangumi-logs \
   --output book-materials.json
-
-# （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --query "三体" --subject-type book --output logs.json
-
-# 调用写作层，直接消费统一 bundle
-# （由主 skill 自动处理）
 ```
 
 ### 游戏评论流程
 
 ```bash
-# 1. 获取基础信息
-python scripts/fetch_game_plot.py --query "沙耶之歌" --output game-info.json
-
-# 2. （可选）爬取攻略站/Wiki
-python scripts/fetch_web_content.py --url "https://wiki.example.com/game" --output wiki-content.md
-
-# 3. （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --query "沙耶之歌" --subject-type game --output logs.json
-
-# 4. 如需要详细剧情，引导用户补充材料
-# 5. 调用写作层
-# （由主 skill 自动处理）
+# 默认入口：统一收集游戏素材
+python scripts/collect_materials.py \
+  --domain game \
+  --query "沙耶之歌" \
+  --url "https://wiki.example.com/game" \
+  --include-guidance \
+  --include-bangumi-logs \
+  --output game-materials.json
 ```
 
 ---
