@@ -99,6 +99,22 @@ python scripts/collect_materials.py \
 
 只有在明确只想调试单一数据源时，才建议直接调用下面这些低层脚本。
 
+## 成稿导出：Markdown 转 Bangumi BBCode
+
+素材整理脚本负责收集可写作材料；成稿阶段默认额外导出一份 Bangumi 可直接发布的 BBCode 版本。
+
+```bash
+# 把完成后的 Markdown 日志转换成 Bangumi BBCode
+python scripts/markdown_to_bangumi_bbcode.py \
+  --input samples/anime-clannad-sample.md \
+  --output samples/anime-clannad-sample.bbcode.txt
+
+# 也可以直接从标准输入读取 Markdown，再输出到标准输出
+python scripts/markdown_to_bangumi_bbcode.py < samples/book-sample.md
+```
+
+当前转换器优先覆盖仓库现有样稿常用结构：标题、小标题、有序/无序列表、引用、链接、粗体、斜体、代码块与分隔线。
+
 ## 依赖安装
 
 ```bash

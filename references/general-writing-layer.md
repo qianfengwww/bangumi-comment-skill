@@ -69,3 +69,16 @@
 - 是否有具体细节支撑判断
 - 涉及剧情时，是否只使用了有根据的剧情点
 - 结尾是否能收住，而不是突然中断
+
+## 成稿交付格式
+
+- 默认把成稿打包成两份：`Markdown` 正文 + `Bangumi BBCode` 版本
+- Markdown 版保留常规标题、小标题、列表结构，作为主编辑稿
+- BBCode 版面向 Bangumi 发布，优先保持以下映射：
+  - Markdown 标题 → `[size]` + `[b]`
+  - 无序 / 有序列表 → `[list]` / `[list=1]`
+  - 引用 → `[quote]`
+  - 链接 → `[url=...]标题[/url]`
+  - 粗体 / 斜体 / 行内代码 → `[b]` / `[i]` / `[code]`
+- 默认复用 `scripts/markdown_to_bangumi_bbcode.py` 生成 BBCode，不额外发明第二套排版规则
+- 最终贴给用户时，先给 Markdown 成稿，再给可直接发布的 BBCode 块
