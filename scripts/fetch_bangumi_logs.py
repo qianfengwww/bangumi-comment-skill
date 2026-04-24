@@ -16,6 +16,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from resolve_subject import add_subject_resolution_arguments, resolve_subject_from_args
 from script_logging import get_logger, setup_logging
 from script_http import HttpClient, RequestError
 
@@ -296,7 +297,7 @@ def output_json(entries: list[Entry], subject_id: str, subject_info: dict, outpu
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Fetch Bangumi reviews/logs for a subject")
-    parser.add_argument("--subject-id", required=True, help="Bangumi subject ID")
+    add_subject_resolution_arguments(parser, require_one=True, include_domain=False)
     parser.add_argument("--subject-type", choices=["anime", "manga", "book", "game"], default="anime", help="Subject type (kept for CLI compatibility)")
     parser.add_argument("--limit", type=int, default=20, help="Max total entries to fetch")
     parser.add_argument("--min-length", type=int, default=100, help="Minimum extracted content length")
@@ -317,27 +318,57 @@ def main() -> int:
     args = build_parser().parse_args()
     client = build_client(args)
 
-    LOGGER.info("fetching Bangumi logs for subject %s", args.subject_id)
-    subject_info = fetch_subject_info(client, args.subject_id)
+    resolution, exit_code = resolve_subject_from_args(
+        args,
+        client,
+        default_domain=TYPE_PATHS.get(args.subject_type, args.subject_type),
+        limit=10,
+        alternatives_limit=5,
+    )
+    if exit_code != 0:
+        error = resolution.get("error") or {}
+        LOGGER.error("%s", error.get("message", "Bangumi 条目解析失败"))
+        for candidate in resolution.get("alternatives", []):
+            LOGGER.info(
+                "候选: %s | %s | score=%s | %s",
+                candidate.get("id"),
+                candidate.get("name_cn") or candidate.get("name"),
+                candidate.get("match_score"),
+                candidate.get("url"),
+            )
+        return exit_code
+
+    resolved_subject_id = resolution.get("subject_id")
+    if not resolved_subject_id:
+        LOGGER.error("Bangumi 条目解析失败，未获得 subject_id")
+        return 2
+
+    subject_id = str(resolved_subject_id)
+    LOGGER.info("fetching Bangumi logs for subject %s", subject_id)
+    subject_info = fetch_subject_info(client, subject_id)
     if not subject_info:
         LOGGER.warning("未获取到 subject API 信息，后续仅依赖网页抓取")
+    elif resolution.get("best_match"):
+        subject_info.setdefault("name", resolution["best_match"].get("name", ""))
+        subject_info.setdefault("name_cn", resolution["best_match"].get("name_cn", ""))
+        subject_info.setdefault("date", resolution["best_match"].get("date", ""))
 
     target_limit = max(1, args.limit)
     entries: list[Entry] = []
 
-    reviews = fetch_review_entries(client, args.subject_id, target_limit, args.max_chars, args.refresh)
+    reviews = fetch_review_entries(client, subject_id, target_limit, args.max_chars, args.refresh)
     entries.extend(entry for entry in reviews if entry.word_count >= args.min_length)
     LOGGER.info("reviews: %s", len(entries))
 
     if len(entries) < target_limit:
         missing = target_limit - len(entries)
-        blogs = fetch_blog_entries(client, args.subject_id, missing, args.max_chars, args.refresh)
+        blogs = fetch_blog_entries(client, subject_id, missing, args.max_chars, args.refresh)
         entries.extend(entry for entry in blogs if entry.word_count >= args.min_length)
         LOGGER.info("reviews + blogs: %s", len(entries))
 
     if args.include_comments and len(entries) < target_limit:
         missing = target_limit - len(entries)
-        comments = fetch_subject_comments(client, args.subject_id, missing, args.max_chars, args.refresh)
+        comments = fetch_subject_comments(client, subject_id, missing, args.max_chars, args.refresh)
         entries.extend(entry for entry in comments if entry.word_count >= args.min_length)
         LOGGER.info("reviews + blogs + comments: %s", len(entries))
 
@@ -356,9 +387,9 @@ def main() -> int:
 
     entries = deduped_entries[:target_limit]
     if args.json or (args.output and args.output.endswith(".json")):
-        output_json(entries, args.subject_id, subject_info, args.output)
+        output_json(entries, subject_id, subject_info, args.output)
     else:
-        output_markdown(entries, args.subject_id, subject_info, args.output)
+        output_markdown(entries, subject_id, subject_info, args.output)
 
     LOGGER.info("done: %s entries", len(entries))
     return 0

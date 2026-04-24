@@ -19,6 +19,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
+from resolve_subject import add_subject_resolution_arguments, resolve_subject_from_args
 from script_http import HttpClient, RequestError, get_logger, setup_logging
 
 BANGUMI_API_BASE = "https://api.bgm.tv/v0"
@@ -83,7 +84,7 @@ def fetch_subject_summary(client: HttpClient, subject_id: int) -> str | None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Fetch anime episode summaries from Bangumi")
-    parser.add_argument("--subject-id", type=int, required=True, help="Bangumi subject ID")
+    add_subject_resolution_arguments(parser, require_one=True, include_domain=False)
     parser.add_argument("--limit", type=int, default=100, help="Max episodes to fetch")
     parser.add_argument("--fetch-web-detail", action="store_true", help="Fetch detailed summaries from web pages (slower)")
     parser.add_argument("--output", type=str, help="Output JSON file path")
@@ -106,10 +107,32 @@ def main() -> int:
         logger=LOGGER,
     )
 
-    LOGGER.info("fetching episodes for subject %s", args.subject_id)
+    resolution, exit_code = resolve_subject_from_args(args, client, default_domain="anime", limit=10, alternatives_limit=5)
+    if exit_code != 0:
+        error = resolution.get("error") or {}
+        LOGGER.error("%s", error.get("message", "Bangumi 条目解析失败"))
+        for candidate in resolution.get("alternatives", []):
+            LOGGER.info(
+                "候选: %s | %s | score=%s | %s",
+                candidate.get("id"),
+                candidate.get("name_cn") or candidate.get("name"),
+                candidate.get("match_score"),
+                candidate.get("url"),
+            )
+        return exit_code
+
+    resolved_subject_id = resolution.get("subject_id")
+    if not resolved_subject_id:
+        LOGGER.error("Bangumi 条目解析失败，未获得 subject_id")
+        return 2
+
+    subject_id = int(resolved_subject_id)
+    resolved_subject = resolution.get("best_match") or {}
+
+    LOGGER.info("fetching episodes for subject %s", subject_id)
 
     # Step 1: Get episode list from API
-    episodes = fetch_episodes_from_api(client, args.subject_id, args.limit)
+    episodes = fetch_episodes_from_api(client, subject_id, args.limit)
     if not episodes:
         LOGGER.error("no episodes found or API request failed")
         return 1
@@ -136,11 +159,19 @@ def main() -> int:
             ep["desc_source"] = "api"
 
     # Step 3: Fetch subject-level summary
-    subject_summary = fetch_subject_summary(client, args.subject_id)
+    subject_summary = fetch_subject_summary(client, subject_id)
 
     # Step 4: Build output
     result = {
-        "subject_id": args.subject_id,
+        "subject_id": subject_id,
+        "subject": {
+            "name": resolved_subject.get("name", ""),
+            "name_cn": resolved_subject.get("name_cn", ""),
+            "type": resolved_subject.get("type"),
+            "url": resolved_subject.get("url", ""),
+        },
+        "resolved_via": resolution.get("match_type"),
+        "query": resolution.get("query"),
         "subject_summary": subject_summary,
         "episodes": [
             {

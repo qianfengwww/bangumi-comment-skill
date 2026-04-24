@@ -15,6 +15,53 @@ pip install beautifulsoup4
 pip install requests
 ```
 
+## 动画：先解析条目 ID（可选但推荐）
+
+**脚本**: `scripts/resolve_subject.py`
+
+### 基本用法
+
+```bash
+# 从 Bangumi 条目链接提取 subject_id
+python scripts/resolve_subject.py --subject-url "https://bgm.tv/subject/51"
+
+# 直接给作品名搜索（返回最佳匹配和候选）
+python scripts/resolve_subject.py --query "CLANNAD" --domain anime
+
+# 自动识别输入是 URL 还是标题
+python scripts/resolve_subject.py --input "https://bangumi.tv/subject/51"
+python scripts/resolve_subject.py --input "CLANNAD"
+```
+
+### 输出格式
+
+```json
+{
+  "query": "CLANNAD",
+  "subject_id": 51,
+  "match_type": "search",
+  "best_match": {
+    "id": 51,
+    "name": "CLANNAD -クラナド-",
+    "name_cn": "CLANNAD",
+    "type": 2,
+    "date": "2007-10-04",
+    "platform": "TV",
+    "url": "https://bgm.tv/subject/51"
+  },
+  "alternatives": [],
+  "error": null
+}
+```
+
+### 使用建议
+
+- 用户只给作品名时，可以先跑一次 resolver 查看候选，也可以直接把标题传给后续脚本
+- URL 输入优先直接提取 `subject_id`，避免不必要搜索
+- 如果返回 `ambiguous_match`，优先让用户从候选里确认
+
+---
+
 ## 动画：获取分集概要
 
 **脚本**: `scripts/fetch_anime_episodes.py`
@@ -24,6 +71,16 @@ pip install requests
 ```bash
 # 获取分集列表（来自 Bangumi API）
 python scripts/fetch_anime_episodes.py --subject-id 12345
+
+# 直接给 Bangumi 条目链接
+python scripts/fetch_anime_episodes.py --subject-url "https://bgm.tv/subject/51"
+
+# 直接给标题查询（默认按动画条目搜索）
+python scripts/fetch_anime_episodes.py --query "CLANNAD"
+
+# 自动识别 URL 或标题
+python scripts/fetch_anime_episodes.py --input "https://bangumi.tv/subject/51"
+python scripts/fetch_anime_episodes.py --input "CLANNAD"
 
 # 保存到 JSON
 python scripts/fetch_anime_episodes.py --subject-id 12345 --output episodes.json
@@ -37,6 +94,14 @@ python scripts/fetch_anime_episodes.py --subject-id 12345 --fetch-web-detail
 ```json
 {
   "subject_id": 12345,
+  "subject": {
+    "name": "CLANNAD -クラナド-",
+    "name_cn": "CLANNAD",
+    "type": 2,
+    "url": "https://bgm.tv/subject/51"
+  },
+  "resolved_via": "query",
+  "query": "CLANNAD",
   "subject_summary": "作品整体简介",
   "episodes": [
     {
@@ -131,6 +196,12 @@ python scripts/read_epub.py --input book.epub --max-chars 10000
 # 获取基础信息
 python scripts/fetch_game_plot.py --subject-id 12345
 
+# 直接给 Bangumi 条目链接
+python scripts/fetch_game_plot.py --subject-url "https://bgm.tv/subject/12345"
+
+# 直接给标题查询（默认按游戏条目搜索）
+python scripts/fetch_game_plot.py --query "沙耶之歌"
+
 # 保存到 JSON
 python scripts/fetch_game_plot.py --subject-id 12345 --output game-info.json
 
@@ -143,6 +214,14 @@ python scripts/fetch_game_plot.py --subject-id 12345 --include-guidance
 ```json
 {
   "subject_id": 12345,
+  "subject": {
+    "name": "沙耶の唄",
+    "name_cn": "沙耶之歌",
+    "type": 4,
+    "url": "https://bgm.tv/subject/12345"
+  },
+  "resolved_via": "query",
+  "query": "沙耶之歌",
   "plot_info": {
     "title": "游戏名称",
     "title_cn": "中文译名",
@@ -254,6 +333,12 @@ python scripts/fetch_web_content.py --url "https://example.com" --max-chars 2000
 # 抓取某作品的用户长评
 python scripts/fetch_bangumi_logs.py --subject-id 12345
 
+# 直接给 Bangumi 条目链接
+python scripts/fetch_bangumi_logs.py --subject-url "https://bgm.tv/subject/51"
+
+# 直接给标题查询，并用 --subject-type 辅助限定领域
+python scripts/fetch_bangumi_logs.py --query "CLANNAD" --subject-type anime
+
 # 限制抓取数量
 python scripts/fetch_bangumi_logs.py --subject-id 12345 --limit 10
 
@@ -272,14 +357,20 @@ python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.md
 ```json
 {
   "subject_id": 12345,
-  "logs": [
+  "subject": {
+    "name": "CLANNAD -クラナド-",
+    "name_cn": "CLANNAD",
+    "date": "2007-10-04"
+  },
+  "entries": [
     {
-      "user": "用户名",
+      "kind": "review",
+      "author": "用户名",
       "rating": 8,
       "date": "2024-01-10",
       "content": "长评内容...",
       "word_count": 1200,
-      "tags": ["剧情", "角色", "主题"]
+      "url": "https://bgm.tv/review/123456"
     }
   ]
 }
@@ -307,10 +398,10 @@ python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.md
 
 ```bash
 # 1. 获取分集信息
-python scripts/fetch_anime_episodes.py --subject-id 12345 --output episodes.json
+python scripts/fetch_anime_episodes.py --query "CLANNAD" --output episodes.json
 
 # 2. （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.json
+python scripts/fetch_bangumi_logs.py --query "CLANNAD" --subject-type anime --output logs.json
 
 # 3. （可选）爬取外部网站
 python scripts/fetch_web_content.py --url "https://example.com/review" --output web-content.md
@@ -329,7 +420,7 @@ python scripts/read_epub.py --input book.epub --output book-content.md
 python scripts/fetch_web_content.py --url "https://example.com/review" --output web-content.md
 
 # （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.json
+python scripts/fetch_bangumi_logs.py --query "三体" --subject-type book --output logs.json
 
 # 调用写作层
 # （由主 skill 自动处理）
@@ -339,13 +430,13 @@ python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.json
 
 ```bash
 # 1. 获取基础信息
-python scripts/fetch_game_plot.py --subject-id 12345 --output game-info.json
+python scripts/fetch_game_plot.py --query "沙耶之歌" --output game-info.json
 
 # 2. （可选）爬取攻略站/Wiki
 python scripts/fetch_web_content.py --url "https://wiki.example.com/game" --output wiki-content.md
 
 # 3. （可选）抓取站内长评参考
-python scripts/fetch_bangumi_logs.py --subject-id 12345 --output logs.json
+python scripts/fetch_bangumi_logs.py --query "沙耶之歌" --subject-type game --output logs.json
 
 # 4. 如需要详细剧情，引导用户补充材料
 # 5. 调用写作层

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
+from resolve_subject import add_subject_resolution_arguments, resolve_subject_from_args
 from script_http import HttpClient, RequestError, get_logger, setup_logging
 
 
@@ -254,7 +255,7 @@ def generate_plot_guidance(plot_info: dict) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Fetch game plot information")
-    parser.add_argument("--subject-id", type=int, required=True, help="Bangumi subject ID")
+    add_subject_resolution_arguments(parser, require_one=True, include_domain=False)
     parser.add_argument("--output", type=str, help="Output JSON file path")
     parser.add_argument("--include-guidance", action="store_true", help="Include guidance for additional materials")
     parser.add_argument("--cache-dir", default=".cache/bangumi-game-plot", help="GET response cache directory")
@@ -276,16 +277,46 @@ def main() -> int:
         logger=LOGGER,
     )
 
-    LOGGER.info("fetching game info for subject %s", args.subject_id)
-    api_data = fetch_subject_from_api(client, args.subject_id)
+    resolution, exit_code = resolve_subject_from_args(args, client, default_domain="game", limit=10, alternatives_limit=5)
+    if exit_code != 0:
+        error = resolution.get("error") or {}
+        LOGGER.error("%s", error.get("message", "Bangumi 条目解析失败"))
+        for candidate in resolution.get("alternatives", []):
+            LOGGER.info(
+                "候选: %s | %s | score=%s | %s",
+                candidate.get("id"),
+                candidate.get("name_cn") or candidate.get("name"),
+                candidate.get("match_score"),
+                candidate.get("url"),
+            )
+        return exit_code
+
+    resolved_subject_id = resolution.get("subject_id")
+    if not resolved_subject_id:
+        LOGGER.error("Bangumi 条目解析失败，未获得 subject_id")
+        return 2
+
+    subject_id = int(resolved_subject_id)
+    resolved_subject = resolution.get("best_match") or {}
+
+    LOGGER.info("fetching game info for subject %s", subject_id)
+    api_data = fetch_subject_from_api(client, subject_id)
     if not api_data:
         LOGGER.error("Bangumi API 返回为空，无法继续")
         return 2
 
-    web_data = fetch_subject_from_web(client, args.subject_id)
+    web_data = fetch_subject_from_web(client, subject_id)
     plot_info = extract_plot_elements(api_data, web_data)
     result = {
-        "subject_id": args.subject_id,
+        "subject_id": subject_id,
+        "subject": {
+            "name": resolved_subject.get("name", ""),
+            "name_cn": resolved_subject.get("name_cn", ""),
+            "type": resolved_subject.get("type"),
+            "url": resolved_subject.get("url", ""),
+        },
+        "resolved_via": resolution.get("match_type"),
+        "query": resolution.get("query"),
         "plot_info": plot_info,
         "data_sources": {
             "api": api_data is not None,
